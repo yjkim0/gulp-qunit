@@ -6,7 +6,8 @@ var path = require('path'),
     chalk = require('chalk'),
     through = require('through2'),
     phantomjs = require('phantomjs'),
-    binPath = phantomjs.path;
+    binPath = phantomjs.path,
+    fs = require('fs');
 
 module.exports = function (params) {
     var options = params || {};
@@ -21,8 +22,14 @@ module.exports = function (params) {
             childArgs.push( options['phantomjs-options'] );
         }
 
+        var runnerPath = '';
+        if ( options['runner-junit-xml'] ) {
+            runnerPath = './runner-junit-xml.js';
+        } else {
+            runnerPath = './node_modules/qunit-phantomjs-runner/runner-json.js';
+        }
         childArgs.push(
-            path.join(__dirname, './node_modules/qunit-phantomjs-runner/runner-json.js'),
+            path.join(__dirname, runnerPath),
             (isAbsolutePath ? 'file:///' + absolutePath.replace(/\\/g, '/') : file.path)
         );
 
@@ -41,32 +48,46 @@ module.exports = function (params) {
             gutil.log('Testing ' + file.relative);
 
             if (stdout) {
-                try {
-                    var out,
-                        result,
-                        color;
-
+                if (options['runner-junit-xml']) {
                     stdout.trim().split('\n').forEach(function(line) {
-                        if (line.indexOf('{') !== -1) {
-                            out = JSON.parse(line.trim());
-                            result = out.result;
-
-                            color = result.failed > 0 ? chalk.red : chalk.green;
-
-                            gutil.log('Took ' + result.runtime + ' ms to run ' + chalk.blue(result.total) + ' tests. ' + color(result.passed + ' passed, ' + result.failed + ' failed.'));
-
-                            if(out.exceptions) {
-                                for(var test in out.exceptions) {
-                                    gutil.log('\n' + chalk.red('Test failed') + ': ' + chalk.red(test) + ': \n' + out.exceptions[test].join('\n  '));
-                                }
-                            }
-                        } else {
-                            line = line.trim(); // Trim trailing cr-lf
-                            gutil.log(line);
+                        try {
+                            var jsonResult = JSON.parse(line);
+                            var filePath = (options['xml-path'] || __dirname);
+                            filePath += '/' + (options['xml-filename'] || '/junit.xml');
+                            fs.writeFile(filePath, jsonResult.junitXml, function (err) {
+                                if (err) return console.log(err);
+                            });
+                        } catch(e) {
                         }
                     });
-                } catch (e) {
-                    this.emit('error', new gutil.PluginError('gulp-qunit', e));
+                } else {
+                    try {
+                        var out,
+                            result,
+                            color;
+
+                        stdout.trim().split('\n').forEach(function(line) {
+                            if (line.indexOf('{') !== -1) {
+                                out = JSON.parse(line.trim());
+                                result = out.result;
+
+                                color = result.failed > 0 ? chalk.red : chalk.green;
+
+                                gutil.log('Took ' + result.runtime + ' ms to run ' + chalk.blue(result.total) + ' tests. ' + color(result.passed + ' passed, ' + result.failed + ' failed.'));
+
+                                if(out.exceptions) {
+                                    for(var test in out.exceptions) {
+                                        gutil.log('\n' + chalk.red('Test failed') + ': ' + chalk.red(test) + ': \n' + out.exceptions[test].join('\n  '));
+                                    }
+                                }
+                            } else {
+                                line = line.trim(); // Trim trailing cr-lf
+                                gutil.log(line);
+                            }
+                        });
+                    } catch (e) {
+                        this.emit('error', new gutil.PluginError('gulp-qunit', e));
+                    }
                 }
             }
 
