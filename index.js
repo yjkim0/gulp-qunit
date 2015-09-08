@@ -60,34 +60,35 @@ module.exports = function (params) {
                         } catch(e) {
                         }
                     });
-                } else {
-                    try {
-                        var out,
-                            result,
-                            color;
+                }
 
-                        stdout.trim().split('\n').forEach(function(line) {
-                            if (line.indexOf('{') !== -1) {
-                                out = JSON.parse(line.trim());
-                                result = out.result;
+                try {
+                    var out,
+                        result,
+                        color;
 
-                                color = result.failed > 0 ? chalk.red : chalk.green;
+                    stdout.trim().split('\n').forEach(function(line) {
+                        if (line.indexOf('{') !== -1) {
+                            out = JSON.parse(line.trim());
+                            if (!out.result) return;
+                            result = out.result;
 
-                                gutil.log('Took ' + result.runtime + ' ms to run ' + chalk.blue(result.total) + ' tests. ' + color(result.passed + ' passed, ' + result.failed + ' failed.'));
+                            color = result.failed > 0 ? chalk.red : chalk.green;
 
-                                if(out.exceptions) {
-                                    for(var test in out.exceptions) {
-                                        gutil.log('\n' + chalk.red('Test failed') + ': ' + chalk.red(test) + ': \n' + out.exceptions[test].join('\n  '));
-                                    }
+                            gutil.log('Took ' + result.runtime + ' ms to run ' + chalk.blue(result.total) + ' tests. ' + color(result.passed + ' passed, ' + result.failed + ' failed.'));
+
+                            if(out.exceptions) {
+                                for(var test in out.exceptions) {
+                                    gutil.log('\n' + chalk.red('Test failed') + ': ' + chalk.red(test) + ': \n' + out.exceptions[test].join('\n  '));
                                 }
-                            } else {
-                                line = line.trim(); // Trim trailing cr-lf
-                                gutil.log(line);
                             }
-                        });
-                    } catch (e) {
-                        this.emit('error', new gutil.PluginError('gulp-qunit', e));
-                    }
+                        } else {
+                            line = line.trim(); // Trim trailing cr-lf
+                            gutil.log(line);
+                        }
+                    });
+                } catch (e) {
+                    this.emit('error', new gutil.PluginError('gulp-qunit', e));
                 }
             }
 

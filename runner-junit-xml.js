@@ -79,6 +79,8 @@
 
     function addLogging() {
         window.document.addEventListener('DOMContentLoaded', function () {
+            var currentTestAssertions = [],
+                testExceptions = {};
             var currentRun, currentModule, currentTest, assertCount;
 
             QUnit.begin(function() {
@@ -151,6 +153,25 @@
 
                     // Add log message of failure to make it easier to find in Jenkins CI
                     currentModule.stdout.push('[' + currentModule.name + ', ' + currentTest.name + ', ' + assertCount + '] ' + data.message);
+
+
+                    var response;
+
+                    response = data.message || '';
+
+                    if (typeof data.expected !== 'undefined') {
+                        if (response) {
+                            response += ', ';
+                        }
+
+                        response += 'expected: ' + data.expected + ', but was: ' + data.actual;
+                    }
+
+                    if (data.source) {
+                        response += '\n' + data.source;
+                    }
+
+                    currentTestAssertions.push('Failed assertion: ' + response);
                 }
             });
 
@@ -161,6 +182,22 @@
                 currentTest.failed = data.failed;
 
                 currentTest = null;
+
+                var name = '';
+
+                if (data.module) {
+                    name += data.module + ': ';
+                }
+                name += data.name;
+
+                if (data.failed) {
+                    var exceptions = currentTestAssertions.slice(0)[0].split('\n');
+                    testExceptions[name] = exceptions.map(function (e) {
+                        return e.trim();
+                    });
+                }
+
+                currentTestAssertions.length = 0;
             });
 
             QUnit.moduleDone(function(data) {
@@ -173,6 +210,12 @@
             });
 
             QUnit.done(function(data) {
+
+                console.log(JSON.stringify({
+                    result: data,
+                    exceptions: testExceptions
+                }));
+
                 currentRun.time = data.runtime || ((new Date()).getTime() - currentRun.start.getTime());  // ms
                 currentRun.total = data.total;
                 currentRun.passed = data.passed;
@@ -185,7 +228,7 @@
                 if (typeof window.callPhantom === 'function') {
                     window.callPhantom({
                         'name': 'QUnit.done',
-                        'data': currentRun
+                        'data': data
                     });
                 }
             });
